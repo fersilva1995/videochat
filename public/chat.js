@@ -1,14 +1,14 @@
-var socket = io.connect("http://localhost:4000");
-var divVideoChatLobby = document.getElementById("video-chat-lobby");
-var divVideoChat = document.getElementById("video-chat-room");
-var joinButton = document.getElementById("join");
-var userVideo = document.getElementById("user-video");
-var peerVideo = document.getElementById("peer-video");
-var roomInput = document.getElementById("roomName")
-var roomName;
-var creator = false;
-var rtcPeerConnection;
-var userStream;
+let socket = io.connect("https://172.16.2.192:4000");
+let divVideoChatLobby = document.getElementById("video-chat-lobby");
+let divVideoChat = document.getElementById("video-chat-room");
+let joinButton = document.getElementById("join");
+let userVideo = document.getElementById("user-video");
+let peerVideo = document.getElementById("peer-video");
+let roomInput = document.getElementById("roomName")
+let roomName;
+let creator = false;
+let rtcPeerConnection;
+let userStream;
 
 
 let iceServers = {
@@ -34,7 +34,7 @@ socket.on("created", function() {
     
     navigator.mediaDevices
         .getUserMedia({
-            audio: false, 
+            audio: true, 
             video: { width: 1280, height: 720},
         }) 
         .then(function(stream) {
@@ -59,7 +59,7 @@ socket.on("joined", function() {
 
     navigator.mediaDevices
         .getUserMedia({
-            audio: false, 
+            audio: true, 
             video: { width: 1280, height: 720},
         }) 
         .then(function(stream) {
@@ -85,24 +85,53 @@ socket.on("full", function() {
 });
 
 socket.on("ready", function() {
-    console.log("CREATOR");
     if(creator) {
+        rtcPeerConnection = new RTCPeerConnection(iceServers);
         rtcPeerConnection.onicecandidate = OnIceCandidateFunction
         rtcPeerConnection.ontrack = OnTrackFunction;
         rtcPeerConnection.addTrack(userStream.getTracks()[0], userStream);
         rtcPeerConnection.addTrack(userStream.getTracks()[1], userStream);
-        rtcPeerConnection.createOffer(function(offer){
-            socket.emit("offer", offer,roomName);
-        }, function(error){
-            console.log(error);
-        })
+        rtcPeerConnection
+            .createOffer()
+            .then((offer) => {
+                rtcPeerConnection.setLocalDescription(offer);
+                socket.emit("offer", offer,roomName);
+            }) 
+            .catch((error) => {
+                console.log(error);
+            });
     }
 });
 
 
-socket.on("candidate", function() {});
-socket.on("offer", function() {});
-socket.on("answer", function() {});
+socket.on("candidate", function(candidate) {
+    let iceCandidate = new RTCIceCandidate(candidate)
+    rtcPeerConnection.addIceCandidate(iceCandidate);
+});
+
+socket.on("offer", function(offer) {
+    if(!creator) {
+        rtcPeerConnection = new RTCPeerConnection(iceServers);
+        rtcPeerConnection.onicecandidate = OnIceCandidateFunction
+        rtcPeerConnection.ontrack = OnTrackFunction;
+        rtcPeerConnection.addTrack(userStream.getTracks()[0], userStream);
+        rtcPeerConnection.addTrack(userStream.getTracks()[1], userStream);
+        rtcPeerConnection.setRemoteDescription(offer);
+        rtcPeerConnection
+            .createAnswer()
+            .then((answer) => {
+                rtcPeerConnection.setLocalDescription(answer);
+                socket.emit("answer", answer,roomName);
+            }) 
+            .catch((error) => {
+                console.log(error);
+            });
+    }
+});
+
+socket.on("answer", function(answer) {
+    rtcPeerConnection.setRemoteDescription(answer);
+});
 
 
 function OnIceCandidateFunction(event) {

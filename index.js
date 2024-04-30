@@ -1,14 +1,37 @@
 const express = require('express');
-const socket = require('socket.io');
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require("path");
+
+
+
+const privateKey  = fs.readFileSync(path.join(__dirname,  "cert.key"), 'utf8');
+const certificate = fs.readFileSync(path.join(__dirname,  "cert.crt"), 'utf8');
+
+const credentials = {key: privateKey, cert: certificate, passphrase: 'Senha@mtw'};
 const app = express();
 
-var server = app.listen(4000, function () {
-    console.log('server is running');
+const httpServer = http.createServer(app);
+const httpsServer = https.createServer(credentials, app);
+
+
+const PORT = 4000;
+httpsServer.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
+
 
 app.use(express.static("public"))
 
-var io = socket(server);
+const io = require('socket.io')(httpsServer, {
+    cors: {
+        origin: '*',
+    }
+});
+
+
+
 
 io.on('connection', function(socket) {
     console.log('User Connected :' + socket.id);
